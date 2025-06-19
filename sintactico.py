@@ -196,21 +196,26 @@ class Parser:
         token = self.match("INCREMENT") or self.match("DECREMENT")
         if token:
             tipo_op = token.type.name
-            nodo_inc = ASTNode(f"{tipo_op} (modificacion)", tipo_op, token.line, token.column)
+
+            # Nodo principal: "incremento" o "decremento"
+            nombre_nodo = "incremento" if tipo_op == "INCREMENT" else "decremento"
+            nodo_inc = ASTNode(nombre_nodo.upper(), tipo_op, token.line, token.column)
 
             id_token = self.match("IDENTIFIER")
             if id_token:
-                # ID original
+                # ID original del incremento
                 nodo_id = ASTNode(f"ID ({id_token.value})", "ID", id_token.line, id_token.column)
                 nodo_inc.agregar_hijo(nodo_id)
 
-                # Construir expresión: a = a + 1;
-                nodo_asig = ASTNode(" ", "ASIGNACION", id_token.line, id_token.column)
+                # Nodo de asignación explícito
+                nodo_asig = ASTNode("asignacion_por_incremento", "ASIGNACION", id_token.line, id_token.column)
                 nodo_asig.agregar_hijo(ASTNode(f"ID ({id_token.value})", "ID", id_token.line, id_token.column))
 
-                op = "+" if tipo_op == "INCREMENT" else "-"
-                operador_node = ASTNode(op, "ARITHMETIC_OP", id_token.line, id_token.column)
+                # Operador suma o resta
+                operador = "+" if tipo_op == "INCREMENT" else "-"
+                operador_node = ASTNode(operador, "ARITHMETIC_OP", id_token.line, id_token.column)
 
+                # a = a + 1
                 operador_node.agregar_hijo(ASTNode(f"ID ({id_token.value})", "ID", id_token.line, id_token.column))
                 operador_node.agregar_hijo(ASTNode("NUM (1)", "NUM", id_token.line, id_token.column))
 
@@ -227,6 +232,7 @@ class Parser:
 
             return nodo_inc
         return None
+
 
 
 
@@ -384,7 +390,7 @@ class Parser:
 
     def sentencia_asignacion(self):
         id_token = self.match("IDENTIFIER")
-        nodo_asignacion = ASTNode(" ", "ASIGNACION", id_token.line if id_token else 0, id_token.column if id_token else 0)
+        nodo_asignacion = ASTNode("ASIGNACION", "ASIGNACION", id_token.line if id_token else 0, id_token.column if id_token else 0)
 
         if id_token:
             nodo_asignacion.agregar_hijo(ASTNode(f"ID ({id_token.value})", "ID", id_token.line, id_token.column))
