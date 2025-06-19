@@ -46,9 +46,8 @@ class LexicalAnalyzer:
         
         # Definir patrones para los tokens
         self.token_patterns = [
-
-            (r'[+-]?\d+\.(?!\d)', TokenType.ERROR), 
-
+            (r'<<|>>', TokenType.ARITHMETIC_OP),
+            
             (r'[+-]?\d+(\.\d+)?([eE][+-]?\d+)?', TokenType.NUMBER),
 
             # Comentarios de múltiples líneas
@@ -61,10 +60,13 @@ class LexicalAnalyzer:
             (r'&&|\|\||!', TokenType.LOGICAL_OP),
 
             # Operadores aritméticos (deja esto después)
-            (r'[+\-*/\^%]|[+]{2}|[-]{2}', TokenType.ARITHMETIC_OP),
+            (r'\+\+', TokenType.INCREMENT),
+            (r'--', TokenType.DECREMENT),
+            (r'[+\-*/\^%]', TokenType.ARITHMETIC_OP),
+
 
             # Operadores relacionales
-            (r'<=|>=|==|!=|<|>', TokenType.RELATIONAL_OP),
+            (r'==|!=|<=|>=|<|>', TokenType.RELATIONAL_OP),
 
             # Símbolos
             (r'[(){},;]', TokenType.SYMBOL),
@@ -137,50 +139,50 @@ class LexicalAnalyzer:
             token_found = False
 
             # Revisar secuencias de '++' y '+'
-            if code[position] == '+':
-                plus_count = 0
-                temp_pos = position
-                while temp_pos < code_len and code[temp_pos] == '+':
-                    plus_count += 1
-                    temp_pos += 1
+            #if code[position] == '+':
+              #  plus_count = 0
+            #    temp_pos = position
+             #   while temp_pos < code_len and code[temp_pos] == '+':
+             #       plus_count += 1
+              #      temp_pos += 1
 
-                for i in range(plus_count // 2):
-                   tokens.append(Token(TokenType.INCREMENT, '++', line_num, col_num + i * 2))
-                   last_token_type = TokenType.INCREMENT
-                   last_token_value = '++'
+              #  for i in range(plus_count // 2):
+               #    tokens.append(Token(TokenType.INCREMENT, '++', line_num, col_num + i * 2))
+              #     last_token_type = TokenType.INCREMENT
+               #    last_token_value = '++'
 
-                if plus_count % 2 == 1:
-                    tokens.append(Token(TokenType.ARITHMETIC_OP, '+', line_num, col_num + (plus_count - 1)))
-                    last_token_type = TokenType.ARITHMETIC_OP
-                    last_token_value = '+'
+               # if plus_count % 2 == 1:
+              #      tokens.append(Token(TokenType.ARITHMETIC_OP, '+', line_num, col_num + (plus_count - 1)))
+              #      last_token_type = TokenType.ARITHMETIC_OP
+               #     last_token_value = '+'
 
-                position += plus_count
-                col_num += plus_count
-                token_found = True
-                continue
+              #  position += plus_count
+              #  col_num += plus_count
+              #  token_found = True
+              #  continue
 
             # Revisar secuencias de '--' y '-'
-            if code[position] == '-':
-                minus_count = 0
-                temp_pos = position
-                while temp_pos < code_len and code[temp_pos] == '-':
-                    minus_count += 1
-                    temp_pos += 1
+            #if code[position] == '-':
+             #   minus_count = 0
+             #   temp_pos = position
+             #   while temp_pos < code_len and code[temp_pos] == '-':
+             #       minus_count += 1
+              #      temp_pos += 1
 
-                for i in range(minus_count // 2):
-                    tokens.append(Token(TokenType.DECREMENT, '--', line_num, col_num + i * 2))
-                    last_token_type = TokenType.DECREMENT
-                    last_token_value = '--'
+             #   for i in range(minus_count // 2):
+              #      tokens.append(Token(TokenType.DECREMENT, '--', line_num, col_num + i * 2))
+              #      last_token_type = TokenType.DECREMENT
+              #      last_token_value = '--'
 
-                if minus_count % 2 == 1:
-                    tokens.append(Token(TokenType.ARITHMETIC_OP, '-', line_num, col_num + (minus_count - 1)))
-                    last_token_type = TokenType.ARITHMETIC_OP
-                    last_token_value = '-'
+             #   if minus_count % 2 == 1:
+              #      tokens.append(Token(TokenType.ARITHMETIC_OP, '-', line_num, col_num + (minus_count - 1)))
+              #      last_token_type = TokenType.ARITHMETIC_OP
+              #      last_token_value = '-'
 
-                position += minus_count
-                col_num += minus_count
-                token_found = True
-                continue
+              #  position += minus_count
+              #  col_num += minus_count
+              #  token_found = True
+              #  continue
 
 
 

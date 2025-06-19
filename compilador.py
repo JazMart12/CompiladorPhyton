@@ -6,6 +6,11 @@ import re
 # Importamos las clases para el analizador léxico
 from lexico import TokenType, Token, LexicalAnalyzer
 
+from sintactico import Parser
+from arbol_sintaxis import ASTNode
+
+
+
 class CompiladorIDE:
     def __init__(self, root):
         self.root = root
@@ -172,8 +177,26 @@ class CompiladorIDE:
         self.pestanasAnalisis.pack(fill=tk.BOTH, expand=True)
 
         # Pestañas para diferentes resultados de análisis
+
+        self.tabSintactico = ttk.Treeview(self.pestanasAnalisis, columns=("Tipo", "Línea", "Columna"), show='tree headings')
+        self.tabSintactico.heading("#0", text="Nodo")
+        self.tabSintactico.heading("Tipo", text="Tipo")
+        self.tabSintactico.heading("Línea", text="Línea")
+        self.tabSintactico.heading("Columna", text="Columna")
+
+        self.tabSintactico.column("#0", width=200)
+        self.tabSintactico.column("Tipo", width=100, anchor="center")
+        self.tabSintactico.column("Línea", width=60, anchor="center")
+        self.tabSintactico.column("Columna", width=80, anchor="center")
+
+
+
+        scroll_sintactico = ttk.Scrollbar(self.pestanasAnalisis, orient="vertical", command=self.tabSintactico.yview)
+        self.tabSintactico.configure(yscrollcommand=scroll_sintactico.set)
+        self.tabSintactico.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scroll_sintactico.pack(side=tk.RIGHT, fill=tk.Y)
+
         self.tabLexico = scrolledtext.ScrolledText(self.pestanasAnalisis, wrap=tk.WORD)
-        self.tabSintactico = scrolledtext.ScrolledText(self.pestanasAnalisis, wrap=tk.WORD)
         self.tabSemantico = scrolledtext.ScrolledText(self.pestanasAnalisis, wrap=tk.WORD)
         self.tabIntermedio = scrolledtext.ScrolledText(self.pestanasAnalisis, wrap=tk.WORD)
         self.tabTablaSimbolos = scrolledtext.ScrolledText(self.pestanasAnalisis, wrap=tk.WORD)
@@ -208,6 +231,21 @@ class CompiladorIDE:
         self.update_status_bar()
         self.highlight_syntax()
         return True
+    
+    def imprimir_arbol_tabla(self, nodo, nivel=0, filas=None):
+        if filas is None:
+            filas = []
+
+        if nodo:
+            nombre = nodo.name if hasattr(nodo, 'name') else 'n/a'
+            tipo = nodo.node_type if hasattr(nodo, 'node_type') else 'n/a'
+            linea = str(nodo.line) if hasattr(nodo, 'line') else "-"
+            columna = str(nodo.column) if hasattr(nodo, 'column') else "-"
+            filas.append(f"{nombre:<20}{tipo:<20}{linea:<10}{columna:<10}")
+            for hijo in nodo.children:
+                self.imprimir_arbol_tabla(hijo, nivel + 1, filas)
+        return filas
+
 
     def update_status_bar(self, event=None):
         # Actualizar información de posición del cursor
@@ -339,132 +377,214 @@ class CompiladorIDE:
 
 
     def highlight_syntax(self):
-        """Resaltar la sintaxis en el editor basado en el análisis léxico"""
-        # Eliminar todos los tags actuales
         for tag in self.editor.tag_names():
-            if tag != "sel":  # No eliminar la selección actual
+            if tag != "sel":
                 self.editor.tag_remove(tag, "1.0", tk.END)
-        
-        # Obtener el código actual
+
         code = self.editor.get(1.0, tk.END)
-        
-        # Analizar el código
         tokens, _ = self.analizador_lexico.analyze(code)
-        
-        # Aplicar colores según el tipo de token
+
         for token in tokens:
-            # Ignorar tokens vacíos o solo espacios
             if not token.value.strip():
                 continue
 
-            start_line = token.line
-            start_col = token.column - 1
-            start_pos = f"{start_line}.{start_col}"
+            try:
+                start_line = token.line
+                start_col = token.column - 1
+                start_pos = f"{start_line}.{start_col}"
 
-            lines = token.value.split('\n')
-            if len(lines) == 1:
-               end_line = start_line
-               end_col = start_col + len(token.value)
-            else:
-               end_line = start_line + len(lines) - 1
-               end_col = len(lines[-1])
-            end_pos = f"{end_line}.{end_col}"
-            
-            tag_name = f"tag_{token.type.name}"
-            if tag_name not in self.editor.tag_names():
-             self.editor.tag_configure(tag_name, foreground=self.token_colors[token.type])
+                lines = token.value.split('\n')
+                if len(lines) == 1:
+                    end_line = start_line
+                    end_col = start_col + len(token.value)
+                else:
+                    end_line = start_line + len(lines) - 1
+                    end_col = len(lines[-1])
 
-            try:  
-             self.editor.tag_add(tag_name, start_pos, end_pos)
-            except tk.TclError:
-                continue
+                end_pos = f"{end_line}.{end_col}"
+
+                tag_name = f"tag_{token.type.name}"
+                if tag_name not in self.editor.tag_names():
+                    self.editor.tag_configure(tag_name, foreground=self.token_colors[token.type])
+
+                self.editor.tag_add(tag_name, start_pos, end_pos)
+
+            except Exception:
+                continue  # Ignora errores de tokens mal posicionados
 
 
-            
 
+                
     def fase_compilacion(self, fase):
         if not self.archivo_guardar():
             return
-        
+
         # Limpiar pestaña de errores
         self.tabErrores.delete('1.0', tk.END)
-        
+
         # Obtener el código
         code = self.editor.get('1.0', 'end-1c')
-        
+        # === ANÁLISIS LÉXICO ===
         if fase == "lexico" or fase == "all":
-            # Realizar análisis léxico
             tokens, errors = self.analizador_lexico.analyze(code)
-            
-            # Mostrar los tokens válidos en la pestaña de análisis léxico
-           
+
             self.tabLexico.delete('1.0', tk.END)
             self.tabLexico.insert('1.0', f"{'Tipo':<20}{'Valor':<20}{'Línea':<10}{'Columna':<10}\n")
             self.tabLexico.insert(tk.END, "-" * 60 + "\n")
 
             for token in tokens:
                 if token.type not in [TokenType.ERROR, TokenType.COMMENT]:
-                    tipo = token.type.name
-                    valor = token.value
-                    linea = token.line
-                    columna = token.column
-                    self.tabLexico.insert(tk.END, f"{tipo:<20}{valor:<20}{linea:<10}{columna:<10}\n")
+                    self.tabLexico.insert(
+                        tk.END,
+                        f"{token.type.name:<20}{token.value:<20}{token.line:<10}{token.column:<10}\n"
+                    )
 
+            # Mostrar errores solo si se está en análisis léxico o 'all'
+            if fase == "lexico" or fase == "all":
+                self.tabErrores.delete('1.0', tk.END)  # Limpiar antes de mostrar errores nuevos
+                if errors:
+                    self.tabErrores.insert('1.0', "Errores detectados:\n\n", "error")
+                    for i, error in enumerate(errors, 1):
+                        self.tabErrores.insert(tk.END, f"{i}. {error}\n\n", "error")
+                    self.pestanasErroresSalida.select(0)
+                else:
+                    self.tabErrores.insert('1.0', "No se encontraron errores en el análisis léxico.\n", "info")
 
-            # Mostrar errores si hay
-            if errors:
-                self.tabErrores.insert('1.0', "Errores detectados:\n\n", "error")
-                for i, error in enumerate(errors, 1):
-                    self.tabErrores.insert(tk.END, f"{i}. {error}\n\n", "error")
-                self.pestanasErroresSalida.select(0)  # Seleccionar pestaña de errores
-            else:
-                self.tabErrores.insert('1.0', "No se encontraron errores en el análisis léxico.\n", "info")
-            
-            # Actualizar la tabla de símbolos
+            # === Tabla de Símbolos ===
             self.tabTablaSimbolos.delete('1.0', tk.END)
             self.tabTablaSimbolos.insert('1.0', "Tabla de Símbolos:\n\n")
             self.tabTablaSimbolos.insert(tk.END, f"{'Identificador':<20}{'Tipo':<15}{'Línea':<10}{'Columna':<10}\n")
             self.tabTablaSimbolos.insert(tk.END, "-" * 55 + "\n")
-            
-            # Agregar solo identificadores a la tabla de símbolos (sin duplicados)
+
             unique_identifiers = {}
             for token in tokens:
                 if token.type == TokenType.IDENTIFIER and token.value not in unique_identifiers:
                     unique_identifiers[token.value] = token
-            
+
             for value, token in unique_identifiers.items():
-                self.tabTablaSimbolos.insert(tk.END, f"{token.value:<20}{'IDENTIFICADOR':<15}{token.line:<10}{token.column:<10}\n")
-                
-            # También mostrar palabras reservadas en la tabla de símbolos
+                self.tabTablaSimbolos.insert(
+                    tk.END, f"{token.value:<20}{'IDENTIFICADOR':<15}{token.line:<10}{token.column:<10}\n"
+                )
+
             for token in tokens:
                 if token.type == TokenType.RESERVED_WORD and token.value not in unique_identifiers:
-                    self.tabTablaSimbolos.insert(tk.END, f"{token.value:<20}{'RESERVADA':<15}{token.line:<10}{token.column:<10}\n")
-            
-            self.pestanasAnalisis.select(0)  # Seleccionar pestaña léxico
-                    
+                    self.tabTablaSimbolos.insert(
+                        tk.END, f"{token.value:<20}{'RESERVADA':<15}{token.line:<10}{token.column:<10}\n"
+                    )
+
+            self.pestanasAnalisis.select(0)
+
+
+        # === ANÁLISIS SINTÁCTICO ===
         if fase == "sintactico" or fase == "all":
-            self.tabSintactico.delete('1.0', tk.END)
-            self.tabSintactico.insert('1.0', "Análisis sintáctico no implementado todavía.\n")
-            if fase == "sintactico":
-                self.pestanasAnalisis.select(1)  # Seleccionar pestaña sintáctico
-        
+            for item in self.tabSintactico.get_children():
+                self.tabSintactico.delete(item)
+
+
+            tokens, _ = self.analizador_lexico.analyze(code)  # Ignora errores léxicos aquí
+            parser = Parser(tokens)
+            ast, sintax_errors = parser.parse()
+            # 🔍 DEBUG: Ver hijos de nodos INCREMENT/DECREMENT
+            for nodo in ast.children:
+                if nodo.node_type in ["INCREMENT", "DECREMENT"]:
+                    print(f"[DEBUG] {nodo.name} tiene {len(nodo.children)} hijo(s)")
+                    for hijo in nodo.children:
+                        print("     ↳", hijo.name)
+
+
+            #if any("Error léxico" in e for e in errors):
+             #   messagebox.showwarning("Advertencia", "Existen errores léxicos. Se continúa con el análisis sintáctico.")
+
+            if sintax_errors:
+                pass
+            else:
+                messagebox.showinfo("Sintaxis", "Análisis sintáctico exitoso.")
+
+            if ast:
+                self.insertar_en_treeview(self.tabSintactico, ast)
+                self.pestanasAnalisis.select(1)
+
+
+            
+
+
+
+        # === ANÁLISIS SEMÁNTICO ===
         if fase == "semantico" or fase == "all":
             self.tabSemantico.delete('1.0', tk.END)
             self.tabSemantico.insert('1.0', "Análisis semántico no implementado todavía.\n")
             if fase == "semantico":
-                self.pestanasAnalisis.select(2)  # Seleccionar pestaña semántico
-        
+                self.pestanasAnalisis.select(2)
+
+        # === CÓDIGO INTERMEDIO ===
         if fase == "intermedio" or fase == "all":
             self.tabIntermedio.delete('1.0', tk.END)
             self.tabIntermedio.insert('1.0', "Generación de código intermedio no implementada todavía.\n")
             if fase == "intermedio":
-                self.pestanasAnalisis.select(3)  # Seleccionar pestaña intermedio
+                self.pestanasAnalisis.select(3)
+
+    def insertar_en_treeview(self, treeview, nodo, parent=""):
+        if nodo is None or "ERROR" in getattr(nodo, 'name', ''):
+            return
+
+        nombre = getattr(nodo, 'name', 'n/a')
+        tipo = getattr(nodo, 'node_type', '')
+        linea = getattr(nodo, 'line', 0)
+        columna = getattr(nodo, 'column', 0)
+
+        if tipo:
+            if "(" in nombre and ")" in nombre:
+                nodo_texto = nombre
+            else:
+                nodo_texto = f"{tipo} ({nombre})"
+            tipo_texto = tipo
+        else:
+            nodo_texto = nombre
+            tipo_texto = ""
+
+        item_id = treeview.insert(parent, tk.END, text=nodo_texto, values=(tipo_texto, linea, columna))
+
+        # Abrir automáticamente el nodo insertado
+        treeview.item(item_id, open=True)
+
+        # Recursivamente insertar hijos
+        for hijo in getattr(nodo, 'children', []):
+            self.insertar_en_treeview(treeview, hijo, parent=item_id)
+
+
+
+
+            
+    def imprimir_arbol(self, nodo, nivel=0):
+        resultado = ""
+        if nodo:
+            indentacion = "  " * nivel
+            resultado += f"{indentacion}- {nodo.name}\n"
+            for hijo in nodo.children:
+                resultado += self.imprimir_arbol(hijo, nivel + 1)
+        return resultado
+    
+    def generar_tabla_sintactica(self, nodo):
+        filas = []
+
+        def recorrer(n):
+            if n:
+                nombre = getattr(n, 'name', 'n/a')
+                tipo = getattr(n, 'type', '')
+                linea = getattr(n, 'line', '-')
+                columna = getattr(n, 'column', '-')
+                filas.append((nombre, tipo, linea, columna))
+                for hijo in getattr(n, 'children', []):
+                    recorrer(hijo)
+
+        recorrer(nodo)
+        return filas
+
 
     def ejecutar_codigo(self):
-        # Simulación de ejecución del código
         self.tabSalida.delete('1.0', tk.END)
         self.tabSalida.insert('1.0', "La ejecución del código no está implementada todavía.\n")
-        self.pestanasErroresSalida.select(1)  # Seleccionar pestaña de salida
+        self.pestanasErroresSalida.select(1)
         
     def mostrar_acerca_de(self):
         messagebox.showinfo(
